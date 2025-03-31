@@ -17,20 +17,17 @@ library(tidyverse)
 library(lubridate)
 
 
-
-
 ##################
 #   Read data   ##
 ##################
 
-#Get all the excel files in the lightstation folders
-relativewd<-"./data/lightstations"
+#Get all the files in the lightstation folders
+relativewd <- "./data/lightstations"
 filenames <- list.files(path=relativewd,pattern=".csv")
 filenames
 
 # Now the relative directory for all files in folder
 ligthstation_file_dir<-paste0(relativewd,"/",filenames)
-
 
 #Reads all the all csv files into a list of data frames
 df_list <- lapply(ligthstation_file_dir, read_csv, show_col_types = FALSE) #uses read_csv

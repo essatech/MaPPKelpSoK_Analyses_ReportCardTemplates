@@ -4,10 +4,9 @@
 ## Date Created: 2025-03-03  
 #-------------------------------------------------
 
-
-# This script contains code for extracting future climate condions at MaPP sitesusing the following dataset
+# This script contains code for extracting future climate condions at MaPP sites
+# using the following dataset
 # https://open.canada.ca/data/en/dataset/33974622-3acf-4f22-86c1-09b92fa91b2d
-
 
 #############################
 #   Load packages & Data   ##

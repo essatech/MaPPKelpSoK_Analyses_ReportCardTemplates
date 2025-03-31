@@ -5,36 +5,6 @@
 # DATE CREATED: 2025-02-17
 # DATE LAST MODIFIED: 2025-02-17
 
-### TIDYING NOTES
-# Column-by-column to do: 
-#   tides_and_currents: only time matters, date is wrong
-# Stipe diameter: 
-#    33% missing; this is when 0 kelp in quadrat.
-#    Diameter is 0 if 0 kelp; change to NA?
-# Urchin observations: 51% missing
-# Bryozoan cover: 
-#    Should be NA when 0 kelp in quadrat
-# Transect information 
-#    Depth at start: 99% missing
-#    End location: 89% missing
-#    Depth at end: 99% missing
-# There are 18 unique site_notes; these often contain important info about GPS coordinates, site conditions, bryozoans, transect coordinates, 
-#    start and end times, site names, oceanographic data location
-#    Sometimes in lat/long; other times UTM-based
-# 2020-2021 WWK data DO NOT include bryozoan coverage
-
-### TIDYING TO DO ITEMS
-# Convert urchin observations into multiple columns: red, green, purple; rare, common, abundant
-# Animal species observed: could split into multiple columns with 0/1 for each species
-# Tides and currents: Low tide is 615m? High tide 845m? Are these times?
-# Convert transect locations into lat/long
-# Convert oceanographic locations into lat/long
-# Consolidate survey_notes into other data fields
-
-### SUGGESTIONS: 
-# Dictate what kind of info in the survey_notes?
-# Not sure why info about bryozoans etc. is not in the correct fields
-
 ###
 # Load libraries
 library(readxl) # For relative path use
@@ -62,8 +32,7 @@ avgStipeDiameter <- function(x) {
 # File path where data are located (Dropbox link)
 # No data to be uploaded to GitHub
 
-kelp_data_folder <- file.path("~", "..", "ESSA Dropbox","d_global","Projects","EN2900to2999",
-  "EN2955 - MaPP Kelp State of Knowledge","Data","MaPP NVI","Kelp")
+kelp_data_folder <- file.path("Data", "MaPP NVI", "Kelp")
 dir(kelp_data_folder)
 
 # List all .csv and .xlsx files
@@ -129,7 +98,6 @@ for (f in same_format) {
   row_sum <- row_sum + nrow(tables_list[[file_idx]])
 }
 
-
 # Notes: 
 #    2022 does not include: location (site_location included); test_question
 #    2023 does not include lat; long; test_question (lat/lon may be fill-in-able given transect data)
@@ -151,7 +119,6 @@ View(post2022_alldata)
 #
 # Ml-K12 versus ML-K12 - approx. same lat/lon?
 # Ml-K17 versus ML-K17?
-
 
 post2022_alldata <- post2022_alldata |>
   filter(site_id != "Testing") |>  
@@ -312,23 +279,12 @@ post2022_alldata_v2$avg_stipe_diameter_mm <- avgStipeDiameter(
   post2022_alldata_v2$quadrat_data_bull_kelp_stipe_diameter_measurements
 )
 
-saveRDS(post2022_alldata_v2, file = "data/tier2_quadratdata/preliminaryCompiledTier2Data.Rds")
+# Optionally: save the compiled data
+# saveRDS(post2022_alldata_v2, file = "data/tier2_quadratdata/preliminaryCompiledTier2Data.Rds")
 
 hist(post2022_alldata_v2$avg_stipe_diameter_mm)
 
-# Wow, seems almost normally distributed...? I'm happily shocked!
-
-# mama_2021_file <- grep(allfiles, pattern = "Mama Kelp Survey Tier 2", value = T)
-
-# mama_2021_df <- readxl::read_excel(mama_2021_file, sheet = "Sheet1") |>
-#   janitor::clean_names() |>
-#   group_by(site_id, date) |>
-#   pivot_longer(cols = transect_locations_transect_1_start_location_t1a:quadrat_data_bull_kelp_q50_bryozoan_cover,
-#   names_to = c("quadrat", "kelp_bulbs", ""), 
-#   names_pattern = "quadrat_data_bull_kelp_q(.*)_(.*)"
-# )
-
-# PLOTTING -------------------------------------------------------------------------------
+# PLOT THE RESULTS -----------------------------------------------------------------------
 
 library(ggplot2)
 
