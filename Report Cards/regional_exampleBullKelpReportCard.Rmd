@@ -1,0 +1,167 @@
+---
+title: "Example Public Regional Report Card: Coast-wide Bull Kelp"
+# These can be turned on to have different inputs to the RMarkdown file
+# params: 
+#   data: "hawaii"
+#   plottitle: "Hawaiian Bathymetry"
+output:
+  html_document:
+    theme: yeti
+    css: "style.css"
+    # toc: yes
+# author: Mairin Deith
+# date: 28-02-2025
+---
+
+<!-- Remove the left padding -->
+<style>
+.main-container {
+    max-width: 1080px;
+    margin-left: 0;
+    margin-right: auto;
+}
+</style>
+
+
+## Coast-wide kelp at-a-glance
+
+**Data shown in this report card are simulated and for demonstration only**. 
+
+
+```{r setup, echo = F, include = F}
+library(ggplot2)
+library(plotly)
+library(readxl)
+library(dplyr)
+library(sf)
+library(colorspace)
+library(ggsflabel)
+
+set.seed(07032025)
+
+kelp_data_folder <- file.path("~", "..", "ESSA Dropbox","d_global","Projects","EN2900to2999",
+  "EN2955 - MaPP Kelp State of Knowledge","Data",
+  "MaPP Site Metadata")
+dir(kelp_data_folder)
+```
+
+:::: {style='display: flex; justify-content: flex-start; column-gap: 10px;'}
+
+::: {}
+
+```{r map it up, echo = F, fig.out = c(8, 8), message = F, warning = F, dpi = 150}
+t2_sites <- read.csv(file.path(kelp_data_folder, 
+  "Subregional_T2_DataSummary.csv"))
+t2_sites_sf <- st_transform(st_as_sf(t2_sites, coords = c("Long", "Lat"), 
+      crs = 4326),
+    crs = 3005)
+
+# Create a bounding box by region ID
+st_bbox_by_feature = function(x, subregionID) {
+  y = st_geometry(x |> filter(Subregion2 == subregionID))
+  st_as_sfc(st_bbox(y))
+}
+
+t2_sites_sf <- t2_sites_sf |>
+  mutate(Subregion2 = case_when(
+    Subregion %in% c("KXX", "Heiltsuk") ~ "Central Coast",
+    Subregion == 'NVI' ~ "North Vancouver Isl.",
+    TRUE ~ Subregion
+  ))
+# Generate fake data; what is the status of each bed?
+
+status_vec <- c("Increasing (+20% or more)", "No trend", "Decreasing (-20% or more)", # "Total bed loss", 
+"Unknown")
+
+t2_sites_sf <- t2_sites_sf |>
+  group_by(Subregion2) |>
+  mutate(n = n()) |>
+  ungroup() |>
+  mutate(example_status = sample(status_vec, n(), replace = TRUE))
+t2_sites_sf$example_status[which(t2_sites_sf$n < 2)] <- NA
+
+# Function to get the "mode" of a character vector
+mode_char <- function(x) unique(x)[which.max(tabulate(match(x, unique(x))))]
+
+bboxes <- list()
+t2_sites_sf$regionstatus <- NA
+for(i in unique(t2_sites_sf$Subregion2)) {
+  ex_regionstatus <- mode_char(t2_sites_sf |> filter(Subregion2 == i) |> pull(example_status))
+  bboxes[[i]] <- st_as_sf(st_bbox_by_feature(x = t2_sites_sf, subregionID = i)) |>
+    mutate(regionstatus = ex_regionstatus)
+  t2_sites_sf$regionstatus[which(t2_sites_sf$Subregion2 == i)] <- ex_regionstatus
+        # st_transform(crs = 3005) |>
+        # st_difference(bc_highres)
+}
+
+globalbbox <- st_bbox(t2_sites_sf)
+
+kelppalette <- colorspace::diverge_hcl(5, palette = "Red-Green")
+
+(pl <- ggplot(data = bboxes[[1]]) + 
+  geom_sf(data = bboxes[[1]], aes(fill = regionstatus), alpha = 0.8, color = NA) + 
+  geom_sf(data = bboxes[[2]], aes(fill = regionstatus), alpha = 0.8, color = NA) +
+  geom_sf(data = bboxes[[3]], aes(fill = regionstatus), alpha = 0.8, color = NA) + 
+  geom_sf(data = bboxes[[4]], aes(fill = regionstatus), alpha = 0.8, color = NA) + 
+  # geom_sf(data = bboxes[[5]], fill = mappalette[5], alpha = 0.8, color = NA) + 
+  geom_sf(data = bcmaps::bc_bound_hres() |> st_transform(crs = 3005),
+    fill = "grey80", color = "grey80") + 
+  geom_sf_label_repel(data = t2_sites_sf |> group_by(Subregion2) |> slice(1), 
+    aes(label = Subregion2), fill = alpha("white", 0.5)) + 
+  scale_fill_manual(name = "Sub-regional status", 
+    values = c(kelppalette[5], kelppalette[4], kelppalette[2], "slategrey"),
+    drop = FALSE,
+    breaks = status_vec,
+    labels = status_vec) +
+  theme_minimal() + 
+  # theme(
+  #   legend.position = "bottom",
+  #   legend.box="vertical",
+  #   legend.direction = "vertical"
+  # ) + 
+  coord_sf(
+    xlim = c(globalbbox$xmin - 200, globalbbox$xmax + 200), 
+    ylim = c(globalbbox$ymin - 200, globalbbox$ymax + 200))
+  ) + 
+  labs(y = "Longitude", x = "Latitude") +
+  theme(legend.position = "none")
+```
+
+:::
+
+::::
+
+:::: {style='display: flex; justify-content: flex-start; column-gap: 10px;'}
+
+::: {}
+
+
+```{r create_map, echo = F, warning = F, fig.out = c(8, 8), dpi = 150}
+
+ggplot(t2_sites_sf, aes(x = factor(Subregion2, levels = c("North Coast", "Haida Gwaii", "Central Coast", "North Vancouver Isl.")), fill = example_status)) + 
+  geom_bar(position = "fill") +
+  scale_fill_manual(name = "Sub-regional status", 
+    values = c(kelppalette[5], kelppalette[4], kelppalette[2], "slategrey"),
+    drop = FALSE,
+    breaks = status_vec,
+    labels = status_vec) +
+  theme_minimal() +
+  labs(y = "Status", x = "Sub-region") +
+  geom_text(data = t2_sites_sf |> group_by(Subregion2) |> slice(1), 
+    aes(label = paste0(n, " sites")), y = 1.05) + 
+  expand_limits(y = 1.1) + 
+  # theme(
+  #   legend.position = "bottom",
+  #   legend.box="vertical",
+  #   legend.direction = "vertical"
+  # ) + 
+  scale_y_continuous(breaks = c(0.25, 0.5, 0.75, 1))
+  # facet_wrap(~Subregion2, scales = "free_x")
+```
+
+::: 
+
+
+::::
+
+**Summary of kelp bed area status**. Each site within a subregion has its own status; the sub-region status is the mode of the individual site statuses. Above each bar in the plot above is the number of sites in that sub-region.

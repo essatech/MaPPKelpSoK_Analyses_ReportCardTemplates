@@ -1,0 +1,798 @@
+---
+title: "Example Report Card: Bull Kelp in NVI"
+# These can be turned on to have different inputs to the RMarkdown file
+# params: 
+#   data: "hawaii"
+#   plottitle: "Hawaiian Bathymetry"
+output:
+  html_document:
+    theme: yeti
+    css: "style.css"
+    toc: no
+# This can be modified when calling the render
+params: 
+  datasheet: "reportCards/eg_DataSheets/BullKelpForm_Full_Mod.xlsm"
+  audience: "internal"
+  mapresolution: "low"
+---
+
+<!-- Remove the left padding -->
+<style>
+.main-container {
+    max-width: 1080px;
+    margin-left: 0;
+    margin-right: auto;
+}
+</style>
+
+
+```{r load-libraries, echo = F, include = F}
+library(ggplot2)
+library(plotly)
+library(readxl)
+library(dplyr)
+library(sf)
+library(colorspace)
+library(ggsflabel)
+library(tidyr)
+library(DT)
+library(formattable)
+library(parzer) # Parses lat-lon coordinates
+
+# Set a universal ggplot font size
+theme_set(theme_minimal(base_size = 14)) 
+```
+
+```{r custom-functions, echo = F, include = F}
+avgStipeDiameter <- function(x) {
+  # Ignore 0 diameter entries
+  x[which(x == 0)] <- NA
+  sapply(x, FUN = function(X) {
+      mean(as.numeric(gsub(x = stringr::str_split(X, "[,\\s-]+")[[1]], pattern = " ", replace = "")), na.rm = T)
+  })
+}
+
+bryozoanConvertToPercent <- function(x) {
+  sapply(x, FUN = function(X) {
+    lookup <- list(
+      "0" = 0,
+      "0.5" = 0.025,
+      "1" = 0.125,
+      "2" = 0.30,
+      "3" = 0.50,
+      "4" = 0.70,
+      "5" = 0.90
+    )
+    lookup[[as.character(X)]]
+  })
+}
+
+# This is the bull kelp report card; only include the bull kelp biomass entry
+# Based on Markus Thompson’s 2025 MaPP Kelp Monitoring Report
+estimateBullKelpBiomasKG <- function(diameter, density, bedarea) {
+  0.06*exp(0.09 * diameter) * density * bedarea
+}
+```
+
+```{r set-internal-or-external, echo = F}
+render_internal <- params$audience == "internal"
+```
+
+```{r load-and-compile-data, echo = F, include = F}
+# The data sheet to be compiled is provided as an argument to the rendering function; 
+#   in each year, the same script can be run after changing the file path to the 
+#   new year's datasheet. 
+bullKelp_eg <- params$datasheet
+
+# All of the annual sampling data are in sheets with the pattern "Bull Kelp Datasheet"
+bk_sheets <- grep(
+  readxl::excel_sheets(bullKelp_eg),
+  pattern = "Bull Kelp Datasheet", value = TRUE)
+
+# Compile sheets into lists
+bk_sheet_ls <- list()
+quadrat_data_ls <- list()
+site_data_ls <- list()
+
+for (sheet in bk_sheets) {
+  # Each sheet becomes a list of data frames to be merged together
+  bk_sheet_ls[[sheet]] <- list()
+  # Read in site data
+  bk_sheet_ls[[sheet]]$siteData <- readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "A2:D6", col_names = F) |>
+  select(-c(`...2`, `...4`)) |>  # Empty column due to merging of columns
+  rename(var = `...1`, data = `...3`) |>
+  pivot_wider(names_from = "var", values_from = "data") |>
+  janitor::clean_names() |>
+  mutate(date = janitor::excel_numeric_to_date(as.numeric(as.character(
+    date)), date_system = "modern"),
+    lat = parzer::parse_llstr(site_gps)$lat,
+    lon = parzer::parse_llstr(site_gps)$lon)
+  # mutate(gps_parsed = st_as_sf(., )
+  bk_sheet_ls[[sheet]]$siteData$kelpbedarea <- as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "C36", col_names = F))
+  bk_sheet_ls[[sheet]]$siteData$areasurveyed <- as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "C37", col_names = F))
+  bk_sheet_ls[[sheet]]$siteData$areasurveyed <- as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "C37", col_names = F))
+
+### Weather, substrate, urchin, etc. data
+  bk_sheet_ls[[sheet]]$siteData$weather <- ifelse(
+    identical(as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "F2", col_names = F)), character(0)), as.character(NA), as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+      range = "F2", col_names = F)))
+  bk_sheet_ls[[sheet]]$siteData$substrate <- paste0(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "F3:F4", col_names = F), collapse = "; ")
+  bk_sheet_ls[[sheet]]$siteData$understorey_kelp <- ifelse(
+    identical(as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "F5", col_names = F)), character(0)), as.character(NA), 
+    as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+      range = "F5", col_names = F)))
+  bk_sheet_ls[[sheet]]$siteData$urchins <- ifelse(
+    identical(as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "F6", col_names = F)), character(0)), as.character(NA), 
+    as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+      range = "F6", col_names = F)))
+  bk_sheet_ls[[sheet]]$siteData$low_tide_m <- ifelse(
+    identical(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "H2", col_names = F)), numeric(0)), as.numeric(NA), 
+    as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+      range = "H2", col_names = F)))
+  bk_sheet_ls[[sheet]]$siteData$time_at_low_tide <- ifelse(
+    identical(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "J2", col_names = F)), numeric(0)), as.numeric(NA), 
+    janitor::excel_numeric_to_date(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+      range = "J2", col_names = F))))
+  bk_sheet_ls[[sheet]]$siteData$time_at_survey_start <- ifelse(
+    identical(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "H5", col_names = F)), numeric(0)), as.numeric(NA), 
+    janitor::excel_numeric_to_date(as.numeric(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "H5", col_names = F)))))
+  bk_sheet_ls[[sheet]]$siteData$time_at_survey_end <- ifelse(
+    identical(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "H6", col_names = F)), numeric(0)), as.numeric(NA), 
+    janitor::excel_numeric_to_date(as.numeric(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "H6", col_names = F)))))
+  bk_sheet_ls[[sheet]]$siteData$current_at_survey_start <- ifelse(
+    identical(as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "I5", col_names = F)), character(0)), as.character(NA),
+    as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "I5", col_names = F)))
+  bk_sheet_ls[[sheet]]$siteData$current_at_survey_end <- ifelse(
+    identical(as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "I6", col_names = F)), character(0)), as.character(NA),
+    as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "I6", col_names = F)))
+  bk_sheet_ls[[sheet]]$siteData$tide_at_survey_start <- ifelse(
+    identical(as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "J5", col_names = F)), character(0)), as.character(NA),
+    as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "J5", col_names = F)))
+  bk_sheet_ls[[sheet]]$siteData$tide_at_survey_end <- ifelse(
+    identical(as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "J6", col_names = F)), character(0)), as.character(NA),
+    as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "J6", col_names = F)))
+  ### OCEANOGRAPHIC DATA
+  bk_sheet_ls[[sheet]]$siteData$oceanographic_gps <- stringr::str_replace(
+    as.character(readxl::read_excel(bullKelp_eg, sheet = sheet, range = "G8", col_names = F)),
+    pattern = "GPS[:|:\ ]", replacement = "")
+  temp_salinity <- readxl::read_excel(bullKelp_eg, sheet = sheet, range = "H9:I12", col_names = T) |>
+    janitor::clean_names()
+  temp_salinity$depth <- paste0("depth", 
+    stringr::str_replace(readxl::read_excel(bullKelp_eg, sheet = sheet, range = "G9:G12", col_names = T)$Depth, 
+    pattern = "−", replacement = "_"))
+  bk_sheet_ls[[sheet]]$siteData <- bk_sheet_ls[[sheet]]$siteData |> bind_cols(
+    temp_salinity |> pivot_wider(names_from = depth, values_from = c(temperature, salinity)))
+  bk_sheet_ls[[sheet]]$siteData$secchi_disk <- ifelse(
+    identical(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "H13", col_names = F)), numeric(0)), as.numeric(NA), 
+    as.numeric(as.numeric(readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "H13", col_names = F))))
+  
+  # Read in transect locations
+  bk_sheet_ls[[sheet]]$transectLocations <- readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    range = "A8:F13") |>
+    # The final 5 rows are summary information
+    mutate_all(as.character) |>
+    pivot_longer(cols = everything(),
+      names_to = c("Variable", "Replicate"), 
+      names_pattern = "(.*)...(.*)", 
+      values_to = "Value") |>
+    select(-Replicate) |>
+    mutate(nVar = length(unique(Variable))) |>
+    # Divide by the length of unique variables
+    mutate(row = ceiling(row_number()/nVar)) |>
+    pivot_wider(names_from = "Variable", values_from = "Value") |>
+    select(-c(nVar, row)) |>
+    janitor::clean_names() |>
+    arrange(point) |>
+    rename_with(.fn = ~ paste0("transect_", .x))
+  
+  # Read in quadrat data
+  bk_sheet_ls[[sheet]]$quadratData <- readxl::read_excel(bullKelp_eg, sheet = sheet, 
+    skip = 14) |>
+    # The final 5 rows are summary information, remove
+    slice(1:(n() - 5)) |>
+    select(-starts_with("Average")) |>
+    mutate_all(as.character) |>
+    pivot_longer(cols = everything(),
+      names_to = c("Variable", "Replicate"), 
+      names_pattern = "(.*)...(.*)", 
+      values_to = "Value") |>
+    select(-Replicate) |>
+    mutate(nVar = length(unique(Variable))) |>
+    # Divide by the length of unique variables
+    mutate(row = ceiling(row_number()/nVar)) |>
+    pivot_wider(names_from = "Variable", values_from = "Value") |>
+    select(-nVar)
+  # Calculate the average stipe diameter 
+  if (any(grep("Stipe Diameter", colnames(bk_sheet_ls[[sheet]]$quadratData)))) {
+    stipe_d_colname <- grep("Stipe Diameter", colnames(bk_sheet_ls[[sheet]]$quadratData), value = T)
+    bk_sheet_ls[[sheet]]$quadratData$avgStipeDiameter <- avgStipeDiameter(bk_sheet_ls[[sheet]]$quadratData[stipe_d_colname])
+  }
+  bk_sheet_ls[[sheet]]$quadratData <- bk_sheet_ls[[sheet]]$quadratData |>
+    janitor::clean_names() |>
+    select(-row)
+  bk_sheet_ls[[sheet]]$quadratData <- bk_sheet_ls[[sheet]]$quadratData |>
+    bind_cols(bk_sheet_ls[[sheet]]$siteData |> select(site_id_location, year, date))
+  # bk_sheet_ls[[sheet]]$transectLocations
+  # bk_sheet_ls[[sheet]]$oceanographicData
+  quadrat_data_ls[[sheet]] <- bk_sheet_ls[[sheet]]$quadratData
+  site_data_ls[[sheet]] <- bk_sheet_ls[[sheet]]$siteData
+}
+
+all_sites_all_years_quadrat_data <- quadrat_data_ls |>
+  purrr::reduce(bind_rows)
+
+all_sites_all_years_site_data <- site_data_ls |>
+  purrr::reduce(bind_rows)
+
+quadrat_site_data <- all_sites_all_years_quadrat_data |>
+  right_join(all_sites_all_years_site_data, by = c("site_id_location", "year")) |>
+  relocate(site_id_location, .before = "quadrat") |>
+  relocate(year, .before = "quadrat") |>
+  arrange(year, site_id_location, as.numeric(quadrat))
+
+  # bk_sheet_ls[[sheet]]$siteData <- bk_sheet_ls[[sheet]]$siteData |>
+  #   st_as_sf(coords = c("lat", "lon"), crs = st_crs(4326))
+
+quadrat_site_data_summary <- quadrat_site_data |>
+  group_by(site_id_location, year) |>
+  filter(!(is.na(number_bulbs) & is.na(stipe_diameter_10))) |>
+  summarize(
+    # Should be only one value per year for both of these
+    areasurveyed = mean(areasurveyed),
+    kelpbedarea = mean(kelpbedarea),
+    mean_lat = mean(lat),
+    mean_lon = mean(lon),
+    # avg_gps = st_centroid(),
+    # These should vary by year
+    n_quadrats = n(),
+    avg_stipe_diameter_mean = mean(as.numeric(avg_stipe_diameter), na.rm = T), 
+    avg_stipe_diameter_lower = quantile(na.omit(as.numeric(avg_stipe_diameter)), 0.05), 
+    avg_stipe_diameter_upper = quantile(na.omit(as.numeric(avg_stipe_diameter)), 0.95), 
+    percent_bryozoans_mean = mean(bryozoanConvertToPercent(percent_bryozoans), na.rm = T),
+    # avg_stipe_diameter_lower = quantile(na.omit(avg_stipe_diameter), 0.05),
+    # avg_stipe_diameter_upper = quantile(na.omit(avg_stipe_diameter), 0.95),
+    number_bulbs_mean = mean(as.numeric(number_bulbs), na.rm = T),
+    number_bulbs_lower = quantile(na.omit(as.numeric(number_bulbs)), 0.05),
+    number_bulbs_upper = quantile(na.omit(as.numeric(number_bulbs)), 0.95)
+  ) |>
+  mutate(site_id_location = factor(site_id_location, levels = paste0("Site ", 1:10))) |>
+  ungroup() |>
+  mutate(estimatedbedbiomasskg = estimateBullKelpBiomasKG(
+    diameter = avg_stipe_diameter_mean, density = number_bulbs_mean, 
+    bedarea = kelpbedarea)) |>
+  mutate(bedareapercent = kelpbedarea / areasurveyed) |>
+  relocate(bedareapercent, .after = kelpbedarea) |>
+  group_by(site_id_location) |>
+  arrange(as.numeric(year)) |>
+  mutate(nyrs = n()) |>
+  mutate(change_since_start = case_when(
+    nyrs < 2 ~ NA,
+    TRUE ~ (last(kelpbedarea) - first(kelpbedarea))/mean(last(kelpbedarea), first(kelpbedarea))
+    ))
+```
+
+
+:::: {style='display: flex; justify-content: flex-start; column-gap: 10px;'}
+
+::: {} 
+
+`r if(params$audience == "internal"){"*For internal use*"}`
+
+`r if(params$audience == "public"){"*For public distribution*"}`
+
+---
+
+**Data shown in this report card are for demonstration only; this was created from simulated data from example data entry sheets**. 
+
+:::
+
+::: {}
+
+```{r optional-graphical-button-summary, out.width = "300px", echo = F, fig.align='center'}
+# knitr::include_graphics("imgs/status_eg.png")
+```
+
+:::
+
+::::
+
+---
+
+:::: {style='display: flex; justify-content: flex-start; column-gap: 10px;'}
+
+::: {}
+
+:::: {.blackbox data-latex=""}
+
+::: {.center data-latex=""}
+## Sub-region at a glance
+\newline
+:::
+#### Summary of monitoring efforts to date
+
+For public-facing report cards, a brief narrative summary of sampling intensity can be included in this text box. 
+This summary could include the range of years of sampling, how many years of monitoring are typical in the sub-region's sites, and any changes to protocols over time.
+Report cards for internal use include a graph of sampling intensity over time. 
+
+---
+
+#### What's been seen? 
+
+This section is designed to hold information about general site trends in narrative terms. 
+For example: 
+
+* **Changes since last year's report card**, like increasing presence of urchins, heat waves, and other observed trends.
+* **Descriptions of trends in key metrics** that have been observed, including metrics that are not presented elsewhere on this card.
+
+---
+
+#### What can you do? 
+
+This section can include actions that could be taken by members of the public in response to trends reported in this report card, including: 
+
+* **No-go zones**, indicating sites where fishing, boating, and/or harvesting are not allowed
+* **Priority areas for urchin removal and monitoring**
+
+---
+
+*Information in this section is currently coded into the report card as an example; to include narrative descriptions in the report card pipeline, data sheets would have to be modified to include a section where public-facing narrative descriptions are written for each year*
+
+::::
+
+:::
+
+::: {}
+
+```{r create-map, echo = F, include = F, warning = F}
+# Set a standard palette
+kelppalette <- colorspace::diverge_hcl(5, palette = "Red-Green")
+# Status vector: used for identifying change
+status_vec <- c("Increasing (+20% or more)", "No trend", "Decreasing (-20% or more)", "Total bed loss", "Unknown")
+
+map_df <- quadrat_site_data_summary |>
+  # Create color coding for change over time
+  mutate(change = factor(case_when(
+    is.na(change_since_start) ~ status_vec[5],
+    change_since_start >= 0.2 ~ status_vec[1],
+    change_since_start > -0.2 ~ status_vec[2],
+    change_since_start == 1 ~ status_vec[4],
+    change_since_start <= -0.2 ~ status_vec[3],
+    TRUE ~ NA
+  ), levels = status_vec)) |>
+  ungroup() |>
+  st_as_sf(coords = c("mean_lon", "mean_lat"), crs = 4326) |>
+  # Convert to BC Albers
+  st_transform(crs = 3005)
+
+# If public, jitter and make the sizes larger
+if (params$audience == "public") {
+  map_df <- map_df |>
+    st_jitter(0.1)
+  point_size <- 8
+} else if (params$audience == "internal") {
+  point_size <- 3
+}
+
+boundbox <- st_bbox(map_df)
+
+# BC basemap layers
+if (params$mapresolution == "high") {
+  bc_basemap <- bcmaps::bc_bound_hres() |>     
+      st_transform(crs = 3005) |>
+      st_as_sf(sf::st_intersects(
+        sf::st_buffer(sf::st_as_sfc(boundbox), dist = 2)))
+} else {
+  # Otherwise print a base map with lower-resolution BC coastline data
+  bc_basemap <- bcmaps::bc_bound() |>     
+    st_transform(crs = 3005) |>
+    st_as_sf(sf::st_intersects(
+      sf::st_buffer(sf::st_as_sfc(boundbox), dist = 2)))
+}
+
+site_map_plot <- ggplot(map_df |> group_by(site_id_location) |> slice(1)) +
+  geom_sf(data = bc_basemap, fill = alpha("grey", 0.9), color = alpha("grey", 0.9)) +
+  geom_sf(aes(color = change, geometry = geometry, shape = change), size = point_size, alpha = 0.5,
+    fill = NA) +
+  scale_color_manual(name = "Change in kelp bed area", 
+  # values = c("red", "blue", "green", "orange", "black"),
+    values = c(kelppalette[5], kelppalette[4], kelppalette[2], kelppalette[1], "black"),
+    # drop = FALSE,
+    breaks = status_vec,
+    labels = status_vec) +
+  scale_shape_manual(name = "Change in kelp bed area", values=c(19, 19, 19, 19, 1),   breaks = status_vec,
+  labels = status_vec) + 
+  coord_sf(
+    xlim = c(boundbox$xmin - 0.05, boundbox$xmax + 0.05), 
+    ylim = c(boundbox$ymin - 0.05, boundbox$ymax + 0.05)) +
+  theme_minimal() + 
+  theme(
+    axis.text.x = element_text(angle = 90),
+    legend.position = "bottom",
+    legend.box="vertical",
+    legend.direction = "vertical"
+  ) + 
+  labs(y = "", x = "")
+# site_map_plot
+```
+
+```{r plot-map, echo = F, warning = F, dpi=200, fig.height = "100%", fig.width = "100%"}
+if (params$audience == "internal") {
+  site_map_plot +
+    ggsflabel::geom_sf_label_repel(aes(label = site_id_location), 
+      fill = alpha("white", 0.5))
+} else {
+  site_map_plot
+} 
+```
+
+**Overview of sampling sites in the NVI subregion**. Spatial changes in bed density, biomass, or area could be shown graphically on this map. Points are colour-coded to reflect trend and/or certainty.
+`r if(params$audience != "internal"){"*Points are jittered and may not reflect actual monitoring locations.*"}`
+
+:::
+
+::::
+
+`r if(params$audience == "internal"){"## Monitoring timeline"}`
+
+```{r yearbysite, echo = F, warning = F, dpi=150, fig.width = 4, fig.height = 6, eval = render_internal}
+bullplot_segments <- quadrat_site_data_summary |> 
+    mutate(year = as.numeric(year)) |>
+    arrange(site_id_location, year) |>
+    mutate(start = year - 0.5, end = year + 0.5)
+    # group_by(site_id_location) |>
+    # # Create group for consecutive years
+    # mutate(group = c(0, cumsum(diff(year) != 1))) |>
+    # group_by(site_id_location, group) |>
+    # filter(n() > 1) |> # Only keep groups with >1 year
+    # group_by(n_quadrats, .add = TRUE) |>
+    # summarize(start = min(year), end = max(year), n_quadrats = first(n_quadrats), .groups = "drop")
+
+sampling_effort_plot <- ggplot(bullplot_segments, aes(y = site_id_location, yend = site_id_location)) +
+        geom_point(aes(x = start + 0.5, alpha = n_quadrats), color = kelppalette[5])+ 
+        geom_segment(aes(x = start, xend = end, alpha = n_quadrats), linewidth = 3, color = kelppalette[1]) +
+        scale_x_continuous(breaks = seq(min(bullplot_segments$start + 0.5), max(bullplot_segments$end - 0.5), by = 1)) +
+        theme_minimal() +
+        scale_alpha_continuous(range = c(0.5, 1), name = "Number of quadrats") + 
+        # By default, will be ordered with lowest at bottom. Inverse the y
+        scale_y_discrete(limits = rev) +
+        labs(y = "", x = "Year")+ 
+    # ggtitle("Sampling intensity") +
+  theme(
+    legend.position = "bottom",
+    legend.box="horizontal",
+    legend.direction = "horizontal"
+  ) 
+sampling_effort_plot
+```
+
+`r if(params$audience == "internal"){"**Sampling effort at each site**. The timespan and number of quadrats sampled with Tier 2 methods at each site in each year in the NVI sub-region. Darker colours indicate a higher number of quadrats were sampled in that year."}`
+
+`r if(params$audience == "internal"){"---"}`
+
+`r if(params$audience == "internal"){"## Kelp bed health indicators: Trends"}`
+
+:::: {style='display: flex; justify-content: flex-start; column-gap: 10px;'}
+
+::: {}
+
+<!-- Only execute this cell if it is an internal facing report card -->
+```{r plot-trends, echo = F, dpi=150, fig.height = 6, warning = F, eval = render_internal}
+bullkelp_data_summary_trends <- quadrat_site_data_summary |>
+    group_by(site_id_location) |> 
+    filter(n() > 1) |>
+    summarize(avg_by_site = mean(number_bulbs_mean, na.rm = T))
+
+p <- ggplot(quadrat_site_data_summary, aes(x = year, y = number_bulbs_mean,
+  group = site_id_location, color = percent_bryozoans_mean)) +
+    # geom_line(aes(group = site_id_location), color = "black") + 
+  colorspace::scale_color_continuous_diverging(palette = "Berlin", name = "Avg. bryozoan % coverage", 
+    mid = percent(0.5), limits = percent(c(0, 1), digits = 1)) + 
+  # scale_colour_continuous_sequential(rev = F,
+  #   name = "Avg. % bryozoan coverage", palette = "Viridis") + 
+      # scale_color_brewer(name = "Avg. % bryozoan coverage", "PiYG") + 
+  scale_size(name = "Avg. stipe diameter (mm)") +
+  geom_errorbar(aes(ymin = number_bulbs_lower, ymax = number_bulbs_upper), width = 0) +
+  geom_point(aes(size = avg_stipe_diameter_mean)) + 
+  geom_hline(data = bullkelp_data_summary_trends, aes(yintercept = avg_by_site), linetype = "dashed", color = "grey") + 
+  facet_wrap(~site_id_location, nrow = 5) + 
+  theme_classic() + 
+  ggtitle("Bull kelp: Kelp density, size, and bryozoan coverage") + 
+  labs(x = "Year", y = expression("Number of bulbs per quadrat")) +
+  theme(
+    legend.position = "bottom",
+    legend.box="vertical",
+    axis.text.x = element_text(angle = 90)) +
+  expand_limits(x = 0)
+
+p
+```
+
+:::
+
+::: {}
+
+
+```{r plot-bed-area, echo = F, warning = F, message = F, fig.height = 6, dpi=150, eval = render_internal}
+
+bullkelp_area_summary_trends <- quadrat_site_data_summary |>
+    group_by(site_id_location) |> 
+    arrange(year) |>
+    filter(n() > 1) |>
+    summarize(initial_area = first(kelpbedarea))
+
+p <- ggplot(quadrat_site_data_summary, aes(x = year, y = kelpbedarea, 
+  group = site_id_location)) +
+    geom_line(aes(group = site_id_location), color = "black") + 
+  # colorspace::scale_color_continuous_sequential(palette = "Tofino", name = "Avg. bed area (m2)") + 
+  # scale_colour_continuous_sequential(rev = F,
+  #   name = "Avg. % bryozoan coverage", palette = "Viridis") + 
+      # scale_color_brewer(name = "Avg. % bryozoan coverage", "PiYG") + 
+  scale_size(name = "Estimated bed biomass (1000 kg)") +
+  # geom_errorbar(aes(ymin = number_bulbs_lower, ymax = number_bulbs_upper), width = 0) +
+  geom_point(aes(size = estimatedbedbiomasskg/1000)) + 
+  geom_hline(data = bullkelp_area_summary_trends, aes(yintercept = initial_area), linetype = "dashed", color = "grey") + 
+  facet_wrap(~site_id_location, nrow = 5) + 
+  theme_classic() + 
+  ggtitle("Bull kelp: Bed area and biomass") + 
+  labs(x = "Year", y = expression("Bed area (m2)")) +
+  theme(
+    legend.position = "bottom",
+    legend.box="horizontal",
+    axis.text.x = element_text(angle = 90)) +
+  expand_limits(x = 0)
+
+p
+```
+
+:::
+
+::::
+
+`r if(params$audience=="internal"){"**Kelp bed health indicators**. Kelp bed health can be monitored with quadrat-level samples of surface bull kelp bulbs per quadrat, stipe diameter (used to calculate biomass), and bryozoan coverage (left panel). Across the bed, health is indicated by the   for each of the 10 example sites in the bull kelp datasheet. For sites with more than one year of monitoring data, the dashed line represents the average kelp density across all years."}`
+
+<!-- If an internal facing card: -->
+`r if(params$audience=="internal"){"## Kelp bed health indicators: Percent change since monitoring began"}`
+
+`r if(params$audience=="internal"){"This table shows the percent change in different kelp bed metrics since monitoring began. For each site with at least two years of monitoring, the percent change in each metric is reported. *NA* indicates that there are not enough years of data to calculate percent change. Blue numbers indicate improvements, red numbers show where metrics are getting worse."}`
+<!-- If an external facing card: -->
+`r if(params$audience=="public"){"## Kelp bed health indicators: Summary of change"}`
+
+`r if(params$audience=="public"){"This table shows trends in different kelp bed metrics since monitoring began. Sites have been given random numerical codes for privacy. For each site with at least two years of monitoring, the trend in each metric is reported. *NA* indicates that there are not enough years of data to calculate a trend. Blue numbers indicate improvements, red numbers show where metrics are getting worse."}`
+
+```{r table-summary, out.height = 5, echo = F, warning = F,message = F, dpi=150}
+
+table_palette <- colorspace::diverge_hcl(7, palette = "Berlin")
+
+table_summary <- quadrat_site_data_summary |>
+  arrange(site_id_location, year) |>
+  group_by(site_id_location) |>
+  summarize(
+    firstyr = first(year),
+    finalyr = last(year),
+    pcentchange_area = case_when(
+      nyrs < 2 ~ NA,
+      TRUE ~ (last(kelpbedarea) - first(kelpbedarea))/mean(last(kelpbedarea), first(kelpbedarea))
+    ),
+    pcentchange_diameter = case_when(
+      nyrs < 2 ~ NA,
+      TRUE ~ (last(avg_stipe_diameter_mean) - first(avg_stipe_diameter_mean))/mean(last(avg_stipe_diameter_mean), first(avg_stipe_diameter_mean))
+    ),
+    pcentchange_density = case_when(
+      nyrs < 2 ~ NA,
+      TRUE ~ (last(number_bulbs_mean) - first(number_bulbs_mean))/mean(last(number_bulbs_mean), first(number_bulbs_mean))
+    ),
+    pcentchange_biomass = case_when(
+      nyrs < 2 ~ NA,
+      TRUE ~ (last(estimatedbedbiomasskg) - first(estimatedbedbiomasskg))/mean(last(estimatedbedbiomasskg), first(estimatedbedbiomasskg))
+    ),
+    pcentchange_bryozoans = case_when(
+      nyrs < 2 ~ NA,
+      TRUE ~ (last(percent_bryozoans_mean) - first(percent_bryozoans_mean))/mean(last(percent_bryozoans_mean), first(percent_bryozoans_mean))
+    )
+  ) |>
+  slice(1) |>
+  ungroup() |>
+  mutate(site_id_year = paste0(site_id_location, " (", firstyr, "-", finalyr, ")"))
+
+if (params$audience == "internal") {
+
+  sign_bryozoan_qual <- formatter("span", 
+    style = x ~ style(color = case_when(
+      x >= 0.2 & x < 0.5 ~ table_palette[5],
+      x >= 0.5 & x < 1 ~ table_palette[6],
+      x >= 1 ~ table_palette[7],
+
+      # x > -0.2 & x <= 0 ~ table_palette[5],
+      x > -0.5 & x <= -0.2 ~ table_palette[3],
+      x > -1 & x <= -0.5 ~ table_palette[2],
+      x == -1 ~ table_palette[1],
+
+      TRUE ~ table_palette[4]
+    )))
+
+  sign_formatter_qual <- formatter("span", 
+    style = x ~ style(color = case_when(
+      x >= 0.2 & x < 0.5 ~ table_palette[3],
+      x >= 0.5 & x < 1 ~ table_palette[2],
+      x >= 1 ~ table_palette[1],
+
+      # x > -0.2 & x <= 0 ~ table_palette[5],
+      x > -0.5 & x <= -0.2 ~ table_palette[5],
+      x > -1 & x <= -0.5 ~ table_palette[6],
+      x == -1 ~ table_palette[7],
+
+      TRUE ~ table_palette[4]
+    )))
+
+  table_summary |> 
+    relocate(site_id_year, .before = "site_id_location") |>
+    select(-c(firstyr, finalyr, site_id_location)) |>
+    mutate(
+      pcentchange_area = percent(pcentchange_area, digits = 0),
+      pcentchange_diameter = percent(pcentchange_diameter, digits = 0),
+      pcentchange_density = percent(pcentchange_density, digits = 0),
+      pcentchange_biomass = percent(pcentchange_biomass, digits = 0),
+      pcentchange_bryozoans = percent(pcentchange_bryozoans, digits = 0)
+    ) |>
+    rename(
+      "Site (years)" = site_id_year,
+      "Area (m2, % change)" = pcentchange_area,
+      "Stipe diameter (mm, % change)" = pcentchange_diameter,
+      "Kelp density/m2 (% change)" = pcentchange_density,
+      "Biomass (kg; % change)" = pcentchange_biomass,
+      "Bryozoan coverage (% change)" = pcentchange_bryozoans
+    ) |>
+    formattable(align = rep("l", ncol(table_summary)), 
+      list(
+        `Area (m2, % change)` = sign_formatter_qual,
+        `Stipe diameter (mm, % change)` = sign_formatter_qual,
+        `Kelp density/m2 (% change)` = sign_formatter_qual,
+        `Biomass (kg; % change)` = sign_formatter_qual,
+        `Bryozoan coverage (% change)` = sign_bryozoan_qual
+        )
+      ) %>%
+      as.datatable(filter = 'none', rownames = FALSE,
+        extensions = 'Buttons', options = list(dom = 't', buttons = c('csv')))
+  # Scrub public data 
+} else if (params$audience == "public") {
+  table_summary_qual <- table_summary |>
+    mutate(
+        pcentchange_area = case_when(
+            is.na(pcentchange_area) ~ NA,
+            pcentchange_area > 1 ~ "Incr. 100%+",
+            pcentchange_area <= -1 ~ "Decr. 100%",
+            pcentchange_area > 0.5 ~ "Incr. 50-100%",
+            pcentchange_area < -0.5 ~ "Decr. 50-100%",
+            pcentchange_area > 0.2 ~ "Incr. 20-50%",
+            pcentchange_area < -0.2 ~ "Decr. 20-50%",
+            TRUE ~ "Stable (<20% change)"
+            # pcentchange_area < 0 ~ "Decr. <20%",
+            # pcentchange_area > 0 ~ "Incr. <20%"
+        ),
+        pcentchange_diameter = case_when(
+            is.na(pcentchange_diameter) ~ NA,
+            pcentchange_diameter > 1 ~ "Incr. 100%+",
+            pcentchange_diameter <= -1 ~ "Decr. 100%",
+            pcentchange_diameter > 0.5 ~ "Incr. 50-100%",
+            pcentchange_diameter < -0.5 ~ "Decr. 50-100%",
+            pcentchange_diameter > 0.2 ~ "Incr. 20-50%",
+            pcentchange_diameter < -0.2 ~ "Decr. 20-50%",
+            TRUE ~ "Stable (<20% change)"
+            # pcentchange_diameter > 0 ~ "Incr. <20%"
+        ),
+        pcentchange_density = case_when(
+            is.na(pcentchange_density) ~ NA,
+            pcentchange_density > 1 ~ "Incr. 100%+",
+            pcentchange_density <= -1 ~ "Decr. 100%",
+            pcentchange_density > 0.5 ~ "Incr. 50-100%",
+            pcentchange_density < -0.5 ~ "Decr. 50-100%",
+            pcentchange_density > 0.2 ~ "Incr. 20-50%",
+            pcentchange_density < -0.2 ~ "Decr. 20-50%",
+            TRUE ~ "Stable (<20% change)"
+            # pcentchange_density < 0 ~ "Decr. <20%",
+            # pcentchange_density > 0 ~ "Incr. <20%"
+        ),
+        pcentchange_biomass = case_when(
+            is.na(pcentchange_biomass) ~ NA,
+            pcentchange_biomass > 1 ~ "Incr. 100%+",
+            pcentchange_biomass <= -1 ~ "Decr. 100%",
+            pcentchange_biomass > 0.5 ~ "Incr. 50-100%",
+            pcentchange_biomass < -0.5 ~ "Decr. 50-100%",
+            pcentchange_biomass > 0.2 ~ "Incr. 20-50%",
+            pcentchange_biomass < -0.2 ~ "Decr. 20-50%",
+            TRUE ~ "Stable (<20% change)"
+            # pcentchange_biomass < 0 ~ "Decr. <20%",
+            # pcentchange_biomass > 0 ~ "Incr. <20%"
+        ),
+        pcentchange_bryozoans =    case_when(
+            is.na(pcentchange_bryozoans) ~ NA,
+            pcentchange_bryozoans > 1 ~ "Incr. 100%+",
+            pcentchange_bryozoans <= -1 ~ "Decr. 100%",
+            pcentchange_bryozoans > 0.5 ~ "Incr. 50-100%",
+            pcentchange_bryozoans < -0.5 ~ "Decr. 50-100%",
+            pcentchange_bryozoans > 0.2 ~ "Incr. 20-50%",
+            pcentchange_bryozoans < -0.2 ~ "Decr. 20-50%",
+            TRUE ~ "Stable (<20% change)"
+            # pcentchange_bryozoans < 0 ~ "Decr. <20%",
+            # pcentchange_bryozoans > 0 ~ "Incr. <20%"
+        )
+    )
+    sign_bryozoan <- formatter("span", 
+  style = x ~ style(color = case_match(x, 
+    "Incr. 20-50%" ~ table_palette[7],
+    "Incr. 50-100%" ~ table_palette[6],
+    "Incr. 100%+" ~ table_palette[5],
+    # 
+    "Decr. 20-50%" ~ table_palette[3],
+    "Decr. 50-100%" ~ table_palette[2],
+    "Decr. 100%" ~ table_palette[1],
+    # Others
+    .default = table_palette[4]
+  )))
+
+sign_formatter <- formatter("span", 
+  style = x ~ style(color = case_match(x, 
+    "Incr. 20-50%" ~ table_palette[1],
+    "Incr. 50-100%" ~ table_palette[2],
+    "Incr. 100%+" ~ table_palette[3],
+    
+    "Decr. 20-50%" ~ table_palette[5],
+    "Decr. 50-100%" ~ table_palette[6],
+    "Decr. 100%+" ~ table_palette[7],
+    # Others
+    .default = table_palette[4]
+  )))
+
+table_summary_qual |> 
+  relocate(site_id_year, .before = "site_id_location") |>
+  select(-c(firstyr, finalyr, site_id_location)) |>
+  # Randomize the site number
+  mutate(site_num = sample(size = n(), 1:n())) |>
+  arrange(site_num) |>
+  relocate(site_num, .before = "site_id_year") |>
+  rename(
+    "Anonymized site number" = site_num,
+    "Area (m2, % change)" = pcentchange_area,
+    "Stipe diameter (mm, % change)" = pcentchange_diameter,
+    "Kelp density/m2 (% change)" = pcentchange_density,
+    "Biomass (kg; % change)" = pcentchange_biomass,
+    "Bryozoan coverage (% change)" = pcentchange_bryozoans
+  ) |>
+  select(-site_id_year) |>
+  formattable(align = rep("l", ncol(table_summary)), 
+    list(
+      `Area (m2, % change)` = sign_formatter,
+      `Stipe diameter (mm, % change)` = sign_formatter,
+      `Kelp density/m2 (% change)` = sign_formatter,
+      `Biomass (kg; % change)` = sign_formatter,
+      `Bryozoan coverage (% change)` = sign_bryozoan
+      )
+    ) %>%
+    as.datatable(filter = 'none', rownames = FALSE, 
+      extensions = 'Buttons', options = list(options = list(dom = 't'), buttons = c("csv")))
+}
+```
