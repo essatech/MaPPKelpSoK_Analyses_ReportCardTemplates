@@ -14,13 +14,13 @@ Each individual
 
 **To download the repository** to your local computer, you can download the repository as a .zip file by clicking the green "<> Code" button above and selecting "Download ZIP". 
 
+![alt text](image.png)
+
 If you have git installed on your computer, you can clone the repository with the following command: 
 
 ```
 git clone https://github.com/essatech/MaPPKelpSoK_AnalysesReportcards.git
 ```
-
-To automatically install dependencies, enter the file directory where this repository is stored and type `renv::restore()`.
 
 ## Contents of the repository
 
