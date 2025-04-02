@@ -280,7 +280,7 @@ post2022_alldata_v2$avg_stipe_diameter_mm <- avgStipeDiameter(
 )
 
 # Optionally: save the compiled data
-# saveRDS(post2022_alldata_v2, file = "data/tier2_quadratdata/preliminaryCompiledTier2Data.Rds")
+saveRDS(post2022_alldata_v2, file = "data/tier2_quadratdata/preliminaryCompiledTier2Data.Rds")
 
 hist(post2022_alldata_v2$avg_stipe_diameter_mm)
 

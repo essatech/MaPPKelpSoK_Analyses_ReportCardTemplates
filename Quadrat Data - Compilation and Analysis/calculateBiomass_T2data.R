@@ -38,8 +38,10 @@ estimateGiantKelpBiomassKG <- function(frondlength, density, bedarea) {
 
 # Step 1: Data compilation ---------------------------------------------------------------
 # Read the compiled data; this is an output from the KelpDataCompilationNVI_post2022 script
-post2022_data <- readRDS(file = "data/tier2_quadratdata/preliminaryCompiledTier2Data.Rds")
-# Read the aerial extent data
+post2022_data <- readRDS(file = file.path("Quadrat Data - Compilation and Analysis/preliminaryCompiledTier2Data.Rds"))
+
+# Read the aerial extent data - this was generated from previous analysis. 
+# REQUIRED COLUMNS: site_id, year, area_m2
 kelp_bed_data <- read.csv(file = "csv summaries/nonQAd spt metrics.csv")
 
 # Merge the quadrat level and kelp bed extent data by site and year
