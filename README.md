@@ -1,16 +1,12 @@
-# Readme: MaPP State of Kelp Analysis Examples
+# MaPP State of Kelp Report: Data compilation and analysis examples and report card templates
 
-## Repository title and description
+## Description
 
 * **Project Name**: MaPP State of Kelp Report
 * **Purpose of this repository**: This repository contains example analysis pipelines and report card generation from RMarkdown templates.
-* **Brief description**: The purpose of this repository is to provide example analysis pipelines for quadrat, UAV, and other data types. These analysis pipelines were introduced in ESSA's State of Kelp Report (Tamburello et al. 2025). This repository also includes report card templates in RMarkdown; these templates were designed to read in example data sheets, compile and analyze the data, and present the results in flexible outputs that can be catered to different audience types. 
+* **Brief description**: The purpose of this repository is to provide example analysis pipelines for quadrat, UAV, and other data types. These analysis pipelines were introduced in ESSA's State of Kelp Report (Tamburello et al. 2025). This repository also includes report card templates in RMarkdown; these templates were designed to read in example data sheets, compile and analyze the data, and present the results in flexible outputs that can be catered to different audience types. All analyses are written in the **R statistical language**. 
 
-## Cloning and using this repository
-
-All analyses are written in the **R statistical language**.
-Analysis pipelines use a variety of R packages for data compilation, analysis, and reporting. 
-Each individual 
+## How to use this repository
 
 **To download the repository** to your local computer, you can download the repository as a .zip file by clicking the green "<> Code" button above and selecting "Download ZIP". 
 
