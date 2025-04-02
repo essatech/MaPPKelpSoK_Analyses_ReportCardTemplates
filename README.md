@@ -60,4 +60,4 @@ These analyses have several libraries which are required dependencies.
 The `renv` package was used to create a reproducible analysis environment, making it simple to install the same libraries and versions of those libraries as were used in generating the Stake of Kelp Report analyses. 
 
 Once you have downloaded the repository by cloning or by downloading and extracting the .zip archive (see above), 
-run `renv::restore()`, which uses the metadata contained in the **renv** folder to install exactly the same version of every package we used in the analysis. 
+run `renv::restore()` in the folder where the repository has been extracted. This function call  uses the metadata contained in the **renv** folder to install exactly the same version of every package we used in the analysis. 
