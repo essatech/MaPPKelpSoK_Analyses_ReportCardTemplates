@@ -20,8 +20,7 @@ git clone https://github.com/essatech/MaPPKelpSoK_AnalysesReportcards.git
 
 ## Contents of the repository
 
-This repository includes five subdirectories, each of which contains example analysis that could be extended to all MaPP sub-regions to mobilize monitoring data. 
-**MaPP data are not included in this repository; analysis pipelines will need to be revised to include file paths to data files saved on your computer.**
+This repository includes five subdirectories, each of which contains example analysis that could be extended to all MaPP sub-regions to mobilize monitoring data. **MaPP data are not included in this repository; re-using these analysis pipelines will require revising scripts to point to MaPP data available on your local computer.**
 
 Below, we describe the directory structure and a brief description of each file in this repository. 
 
