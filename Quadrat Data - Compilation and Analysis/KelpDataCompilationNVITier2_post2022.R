@@ -32,7 +32,7 @@ avgStipeDiameter <- function(x) {
 # File path where data are located (Dropbox link)
 # No data to be uploaded to GitHub
 
-kelp_data_folder <- file.path("Data", "MaPP NVI", "Kelp")
+kelp_data_folder <- file.path("..", "..", "Data", "MaPP NVI", "Kelp")
 dir(kelp_data_folder)
 
 # List all .csv and .xlsx files
@@ -88,7 +88,8 @@ for (f in same_format) {
     mutate(site_id = case_when(
       site_id == "Km-02" ~ "KM-K02",
       TRUE ~ site_id
-    ))
+    )) |>
+    mutate(nation = "KMKS")
   message("...nrows: ", nrow(tables_list[[file_idx]]))
   # message(file_idx)
   # message("...Missing in column_name_dict: ", paste0(collapse = "; ", 
@@ -253,6 +254,7 @@ wwk_2020_2021_df <- wwk_2020_2021$quadrats |>
 # Perimeter data messes up the data structure; turns into one row per point 
   # whereas the other post-2022 data includes one row per quad.
 wwk_2020_2021_df <- wwk_2020_2021_df |> 
+  mutate(nation = "WKUM") |>
   # left_join(wwk_2020_2021$perimeter_info |>
   #   rename(perimeter_depth_m = depth_m) |>
   #   group_by(site_id, date) |>
@@ -278,6 +280,8 @@ lubridate::date(post2022_alldata_v2$tides_and_currents_time_at_low_tide) <-
 post2022_alldata_v2$avg_stipe_diameter_mm <- avgStipeDiameter(
   post2022_alldata_v2$quadrat_data_bull_kelp_stipe_diameter_measurements
 )
+
+table(post2022_alldata_v2$nation, post2022_alldata_v2$year)
 
 # Optionally: save the compiled data
 saveRDS(post2022_alldata_v2, file = "data/tier2_quadratdata/preliminaryCompiledTier2Data.Rds")

@@ -1,9 +1,6 @@
 ---
 title: "Example Public Regional Report Card: Coast-wide Bull Kelp"
 # These can be turned on to have different inputs to the RMarkdown file
-# params: 
-#   data: "hawaii"
-#   plottitle: "Hawaiian Bathymetry"
 output:
   html_document:
     theme: yeti
@@ -39,6 +36,7 @@ library(ggsflabel)
 
 set.seed(07032025)
 
+# Set your own working directory
 kelp_data_folder <- file.path("~", "..", "ESSA Dropbox","d_global","Projects","EN2900to2999",
   "EN2955 - MaPP Kelp State of Knowledge","Data",
   "MaPP Site Metadata")
@@ -56,20 +54,20 @@ t2_sites_sf <- st_transform(st_as_sf(t2_sites, coords = c("Long", "Lat"),
       crs = 4326),
     crs = 3005)
 
-# Create a bounding box by region ID
-st_bbox_by_feature = function(x, subregionID) {
-  y = st_geometry(x |> filter(Subregion2 == subregionID))
-  st_as_sfc(st_bbox(y))
-}
-
 t2_sites_sf <- t2_sites_sf |>
   mutate(Subregion2 = case_when(
     Subregion %in% c("KXX", "Heiltsuk") ~ "Central Coast",
     Subregion == 'NVI' ~ "North Vancouver Isl.",
     TRUE ~ Subregion
   ))
-# Generate fake data; what is the status of each bed?
 
+# Create a bounding box by Subregion2
+st_bbox_by_feature = function(x, subregionID) {
+  y = st_geometry(x |> filter(Subregion2 == subregionID))
+  st_as_sfc(st_bbox(y))
+}
+
+# Generate fake data; what is the status of each bed?
 status_vec <- c("Increasing (+20% or more)", "No trend", "Decreasing (-20% or more)", # "Total bed loss", 
 "Unknown")
 

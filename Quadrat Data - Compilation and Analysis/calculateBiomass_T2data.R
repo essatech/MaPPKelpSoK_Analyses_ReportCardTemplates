@@ -15,6 +15,7 @@
 # Step 0: Load libraries and custom functions --------------------------------------------
 library(dplyr)
 library(ggplot2)
+library(colorspace)
 
 # Function to calculate average stipe diameter from "," separated list
 avgStipeDiameter <- function(x) {
@@ -42,7 +43,7 @@ post2022_data <- readRDS(file = file.path("Quadrat Data - Compilation and Analys
 
 # Read the aerial extent data - this was generated from previous analysis. 
 # REQUIRED COLUMNS: site_id, year, area_m2
-kelp_bed_data <- read.csv(file = "csv summaries/nonQAd spt metrics.csv")
+kelp_bed_data <- read.csv(file = "Quadrat Data - Compilation and Analysis/nonQAd spt metrics.csv")
 
 # Merge the quadrat level and kelp bed extent data by site and year
 post2022_data_merged <- post2022_data |>
@@ -69,7 +70,7 @@ post2022_data_biomass_summaries <- post2022_data_merged |>
 
 # Step 3: Plot results -------------------------------------------------------------------
 
-ggplot(post2022_data_biomass_summaries |> filter(site_id %in% c("CR-K03", "TL-K05")), 
+eg_plot <- ggplot(post2022_data_biomass_summaries |> filter(site_id %in% c("CR-K03", "TL-K05")), 
   aes(x = year, y = bed_biomass)) +
   scale_color_continuous_sequential(palette = "Terrain 2", begin = 0.5) + 
   geom_line(group = "site_id") + 
@@ -77,6 +78,12 @@ ggplot(post2022_data_biomass_summaries |> filter(site_id %in% c("CR-K03", "TL-K0
   scale_x_log10() + 
   facet_wrap(~site_id, scales = "free_y") +
   theme_classic()
+
+eg_plot + 
+  xlab("Year") + ylab("Bed biomass (wet weight in kg)") + 
+  labs(color = "Avg. bulb count\nper quadrat", 
+    size = "Bed area (m^2)") +
+  theme(axis.text.x = element_text(angle = 90))
 
 # 
 post2022_data_biomass_summaries |> 
