@@ -31,7 +31,7 @@ avgStipeDiameter <- function(x) {
 # Functions to estimate bed biomass (in kilograms) based on kelp and kelp bed attributes
 # Relationships from the 2025 MaPP Monitoring Report (Thompson 2025). 
 estimateBullKelpBiomasKG <- function(diameter, density, bedarea) {
-  0.06*exp(0.09 * diameter) * density * bedarea
+  0.07*exp(0.08 * diameter) * density * bedarea
 }
 estimateGiantKelpBiomassKG <- function(frondlength, density, bedarea) {
   0.15*exp(0.23 * frondlength) * density * bedarea
