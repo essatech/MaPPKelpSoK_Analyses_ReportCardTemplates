@@ -9,7 +9,7 @@
 #   both a public and private report card
 rmarkdown::render(input = file.path("subregional_exampleBullKelpReportCard.Rmd"), 
     # Set the output file name to reflect the audience
-    output_file = "egSubregionalReportCard_Public.html",
+    output_file = "egSubregionalReportCard_Public2.html",
     # Identify how to render the file using input parameters
     params = list(
         # "public" or "internal" audiences - changes what types of information is shown
@@ -19,7 +19,7 @@ rmarkdown::render(input = file.path("subregional_exampleBullKelpReportCard.Rmd")
         mapresolution = "low", 
         # Full file path to the most up-to-date datasheet in the standardized data 
         # entry format
-        datasheet = file.path("eg_DataSheets/BullKelpForm_Full_Mod.xlsm")))
+        datasheet = file.path("eg_DataSheets/BullKelpForm_Full_Coordinates.xlsm")))
 
 # Next, render an internal-facing public report card
 rmarkdown::render(file.path("subregional_exampleBullKelpReportCard.Rmd"), 
@@ -33,7 +33,7 @@ rmarkdown::render(file.path("subregional_exampleBullKelpReportCard.Rmd"),
         mapresolution = "low", 
         # Full file path to the most up-to-date datasheet in the standardized data 
         # entry format
-        datasheet = file.path("eg_DataSheets/BullKelpForm_Full_Mod.xlsm")))
+        datasheet = file.path("eg_DataSheets/BullKelpForm_Full_Coordinates.xlsm")))
 
 # Render a regional report card (using fake generated data)
 rmarkdown::render(file.path("subregional_exampleBullKelpReportCard.Rmd"),

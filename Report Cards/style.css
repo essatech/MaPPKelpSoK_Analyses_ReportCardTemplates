@@ -1,0 +1,13 @@
+body {
+  margin: 10px
+}
+.blackbox {
+  padding: 1em;
+  background: whitesmoke;
+  color: black;
+  border: 2px solid slategrey;
+  border-radius: 10px;
+}
+.center {
+  text-align: center;
+}

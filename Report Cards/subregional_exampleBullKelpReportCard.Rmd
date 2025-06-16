@@ -9,7 +9,7 @@ output:
     theme: yeti
     css: "style.css"
     toc: no
-# This can be modified when calling the render
+# These params can be modified when calling the render
 params: 
   datasheet: "reportCards/eg_DataSheets/BullKelpForm_Full_Mod.xlsm"
   audience: "internal"
@@ -439,7 +439,7 @@ site_map_plot <- ggplot(map_df |> group_by(site_id_location) |> slice(1)) +
 # site_map_plot
 ```
 
-```{r plot-map, echo = F, warning = F, dpi=200, fig.height = "100%", fig.width = "100%"}
+```{r plot-map, echo = F, warning = F, dpi=200, fig.width = 5} 
 if (params$audience == "internal") {
   site_map_plot +
     ggsflabel::geom_sf_label_repel(aes(label = site_id_location), 
